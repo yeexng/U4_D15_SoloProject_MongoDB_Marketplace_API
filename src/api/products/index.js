@@ -24,8 +24,7 @@ productsRouter.get("/", async (req, res, next) => {
     )
       .limit(mongoQuery.options.limit)
       .skip(mongoQuery.options.skip)
-      .sort(mongoQuery.options.sort)
-      .populate(); //still empty
+      .sort(mongoQuery.options.sort);
     const total = await ProductsModel.countDocuments(mongoQuery.criteria);
     res.send({
       links: mongoQuery.links("http://localhost:3005/blogPosts", total),
@@ -40,9 +39,7 @@ productsRouter.get("/", async (req, res, next) => {
 
 productsRouter.get("/:productId", async (req, res, next) => {
   try {
-    const product = await ProductsModel.findById(
-      req.params.productId
-    ).populate();
+    const product = await ProductsModel.findById(req.params.productId);
     if (product) {
       res.send(product);
     } else {
@@ -99,5 +96,141 @@ productsRouter.delete("/:productId", async (req, res, next) => {
     next(error);
   }
 });
+
+//Reviews
+productsRouter.post("/:productId/reviews", async (req, res, next) => {
+  try {
+    const newReview = req.body;
+    const reviewToInsert = {
+      ...newReview,
+    };
+    const updatedProducts = await ProductsModel.findByIdAndUpdate(
+      req.params.productId,
+      { $push: { reviews: reviewToInsert } },
+      { new: true, runValidators: true }
+    );
+    if (updatedProducts) {
+      res.status(201).send({ updatedProducts });
+    } else {
+      next(
+        createHttpError(
+          404,
+          `Product with id ${req.params.productId} not found!`
+        )
+      );
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+productsRouter.get("/:productId/reviews", async (req, res, next) => {
+  try {
+    const product = await ProductsModel.findById(req.params.productId);
+    if (product) {
+      res.send(product.reviews);
+    } else {
+      next(
+        createHttpError(
+          404,
+          `Product with id ${req.params.productId} not found!`
+        )
+      );
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+productsRouter.get("/:productId/reviews/:reviewId", async (req, res, next) => {
+  try {
+    const product = await ProductsModel.findById(req.params.productId);
+    if (product) {
+      const review = product.reviews.find(
+        (r) => r._id.toString() === req.params.reviewId
+      );
+      if (review) {
+        res.send(review);
+      } else {
+        next(
+          createHttpError(
+            404,
+            `Review with id ${req.params.reviewId} not found!`
+          )
+        );
+      }
+    } else {
+      next(
+        createHttpError(
+          404,
+          `Product with id ${req.params.productId} not found!`
+        )
+      );
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+productsRouter.put("/:productId/reviews/:reviewId", async (req, res, next) => {
+  try {
+    const product = await ProductsModel.findById(req.params.productId);
+    if (product) {
+      const i = product.reviews.findIndex(
+        (r) => r._id.toString() === req.params.reviewId
+      );
+      if (i !== -1) {
+        product.reviews[i] = {
+          ...product.reviews[i].toObject(),
+          ...req.body,
+          updatedAt: new Date(),
+        };
+        await product.save();
+        res.send(product.reviews[i]);
+      } else {
+        next(
+          createHttpError(
+            404,
+            `Review with id ${req.params.reviewId} not found!`
+          )
+        );
+      }
+    } else {
+      next(
+        createHttpError(
+          404,
+          `Product with id ${req.params.productId} not found!`
+        )
+      );
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+productsRouter.delete(
+  "/:productId/reviews/:reviewId",
+  async (req, res, next) => {
+    try {
+      const product = await ProductsModel.findByIdAndUpdate(
+        req.params.productId,
+        { $pull: { reviews: { _id: req.params.reviewId } } },
+        { new: true, runValidators: true }
+      );
+      if (product) {
+        res.status(204).send();
+      } else {
+        next(
+          createHttpError(
+            404,
+            `Review with id ${req.params.reviewId} not found!`
+          )
+        );
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default productsRouter;
